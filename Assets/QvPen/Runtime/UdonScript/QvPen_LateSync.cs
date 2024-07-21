@@ -51,6 +51,7 @@ namespace QvPen.UdonScript
         private const int FOOTER_ELEMENT_PEN_ID = QvPen_Pen.FOOTER_ELEMENT_PEN_ID;
 
         //private const int FOOTER_ELEMENT_DRAW_INK_INFO = QvPen_Pen.FOOTER_ELEMENT_DRAW_INK_INFO;
+        //private const int FOOTER_ELEMENT_DRAW_EXPIRES_AT = QvPen_Pen.FOOTER_ELEMENT_DRAW_EXPIRES_AT;
         //private const int FOOTER_ELEMENT_DRAW_LENGTH = QvPen_Pen.FOOTER_ELEMENT_DRAW_LENGTH;
 
         //private const int FOOTER_ELEMENT_ERASE_POINTER_POSITION = QvPen_Pen.FOOTER_ELEMENT_ERASE_POINTER_POSITION;

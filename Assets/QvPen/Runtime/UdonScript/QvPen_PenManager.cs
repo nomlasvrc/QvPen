@@ -31,6 +31,10 @@ namespace QvPen.UdonScript
         public Material pcInkMaterial;
         public Material questInkMaterial;
 
+        [SerializeField]
+        private float _duration = float.PositiveInfinity;
+        public float duration => _duration;
+
         public LayerMask surftraceMask = ~0;
 
         [SerializeField]

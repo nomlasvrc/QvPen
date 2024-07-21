@@ -1,4 +1,5 @@
-﻿using UdonSharp;
+﻿using System;
+using UdonSharp;
 using UnityEngine;
 using VRC.SDK3.Components;
 using VRC.SDKBase;
@@ -101,6 +102,8 @@ namespace QvPen.UdonScript
         private int inkColliderLayer;
         private const float followSpeed = 30f;
         private int inkNo;
+
+        private float duration;
 
         // Pointer
         private bool isPointerEnabled;
@@ -271,6 +274,8 @@ namespace QvPen.UdonScript
             inkPrefab.colorGradient = manager.colorGradient;
             trailRenderer.colorGradient = CreateReverseGradient(manager.colorGradient);
 
+            duration = manager.duration;
+
             surftraceMask = manager.surftraceMask;
         }
 
@@ -292,9 +297,10 @@ namespace QvPen.UdonScript
         public const int FOOTER_ELEMENT_PEN_ID = 1;
 
         public const int FOOTER_ELEMENT_DRAW_INK_INFO = 2;
+        public const int FOOTER_ELEMENT_DRAW_EXPIRES_AT = 3;
         //public const int FOOTER_ELEMENT_DRAW_INK_WIDTH = ;
         //public const int FOOTER_ELEMENT_DRAW_INK_COLOR = ;
-        public const int FOOTER_ELEMENT_DRAW_LENGTH = 3;
+        public const int FOOTER_ELEMENT_DRAW_LENGTH = 4;
 
         public const int FOOTER_ELEMENT_ERASE_POINTER_POSITION = 2;
         public const int FOOTER_ELEMENT_ERASE_POINTER_RADIUS = 3;
@@ -855,6 +861,18 @@ namespace QvPen.UdonScript
             SetData(data, FOOTER_ELEMENT_PEN_ID, penIdVector);
             SetData(data, FOOTER_ELEMENT_DRAW_INK_INFO, new Vector3(inkMeshLayer, inkColliderLayer, enabledLateSync ? 1f : 0f));
 
+            Vector3 expiresAtData;
+            if (0 < duration && !float.IsPositiveInfinity(duration))
+            {
+                var expiresAt = DateTimeOffset.UtcNow.AddSeconds(duration);
+                expiresAtData = PackDateTimeToVector3(expiresAt);
+            }
+            else
+            {
+                expiresAtData = Vector3.left;
+            }
+            SetData(data, FOOTER_ELEMENT_DRAW_EXPIRES_AT, expiresAtData);
+
             return data;
         }
 
@@ -878,6 +896,9 @@ namespace QvPen.UdonScript
             SetData(data, FOOTER_ELEMENT_DATA_INFO, new Vector3Int(localPlayerId, mode, GetFooterSize(mode)));
             SetData(data, FOOTER_ELEMENT_PEN_ID, penIdVector);
             SetData(data, FOOTER_ELEMENT_DRAW_INK_INFO, new Vector3Int(inkMeshLayer, inkColliderLayer, enabledLateSync ? 1 : 0));
+
+            var expiresAtMemory = lineRenderer.transform.Find("ExpiresAt");
+            SetData(data, FOOTER_ELEMENT_DRAW_EXPIRES_AT, expiresAtMemory ? expiresAtMemory.localPosition : Vector3.left);
 
             return data;
         }
@@ -931,6 +952,22 @@ namespace QvPen.UdonScript
 
         private void CreateInkInstance(Vector3[] data)
         {
+            float duration;
+
+            var expiresAtData = GetData(data, FOOTER_ELEMENT_DRAW_EXPIRES_AT);
+            if (expiresAtData.x >= 0f)
+            {
+                var expiresAt = UnPackDateTimeFromVector3(expiresAtData);
+                duration = Math.Min(float.MaxValue, (float)(expiresAt - DateTimeOffset.UtcNow).TotalSeconds);
+            }
+            else
+            {
+                duration = float.PositiveInfinity;
+            }
+
+            if (duration <= 0f)
+                return;
+
             lineInstance = Instantiate(inkPrefab.gameObject);
             lineInstance.name = $"{inkPrefix} ({inkNo++})";
 
@@ -946,6 +983,11 @@ namespace QvPen.UdonScript
             CreateInkCollider(line);
 
             lineInstance.SetActive(true);
+
+            if (0 <= duration && !float.IsPositiveInfinity(duration))
+                Destroy(lineInstance, duration);
+
+            SetExpiresAtData(line, expiresAtData);
 
             justBeforeInk = lineInstance;
         }
@@ -968,6 +1010,15 @@ namespace QvPen.UdonScript
 
             inkCollider.GetComponent<MeshCollider>().sharedMesh = mesh;
             inkCollider.gameObject.SetActive(true);
+        }
+
+        private void SetExpiresAtData(LineRenderer lineRenderer, Vector3 expiresAtData)
+        {
+            var expiresAtMemory = lineRenderer.transform.Find("ExpiresAt");
+            if (expiresAtMemory)
+            {
+                expiresAtMemory.localPosition = expiresAtData;
+            }
         }
 
         #endregion
@@ -1047,6 +1098,26 @@ namespace QvPen.UdonScript
                 child.localRotation = Quaternion.identity;
                 child.localScale = Vector3.one;
             }
+        }
+
+        private Vector3 PackDateTimeToVector3(DateTimeOffset dateTimeOffset)
+        {
+            var unixTime = dateTimeOffset.ToUnixTimeSeconds();
+            var x = (int)(unixTime & 0x7fffff);
+            var y = (int)((unixTime >> 23) & 0x7fffff);
+            var z = (int)((unixTime >> 46) & 0x3ffff);
+
+            return (Vector3)new Vector3Int(x, y, z);
+        }
+
+        private DateTimeOffset UnPackDateTimeFromVector3(Vector3 data)
+        {
+            long unixTime;
+            unixTime = (long)data.x;
+            unixTime |= ((long)data.y & 0x7fffff) << 23;
+            unixTime |= ((long)data.z & 0x3ffff) << 46;
+
+            return DateTimeOffset.FromUnixTimeSeconds(unixTime);
         }
 
         #endregion
